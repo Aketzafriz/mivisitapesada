@@ -1,0 +1,84 @@
+import http.server
+import socketserver
+import json
+import os
+
+PORT = 5000
+PRODUCT_DATA_DIR = 'product_data'
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == '/':
+            # Cargar los datos de los productos desde los archivos JSON
+            products = []
+            for filename in os.listdir(os.path.join(os.path.dirname(__file__), PRODUCT_DATA_DIR)):
+                try:
+                    with open(os.path.join(os.path.dirname(__file__), PRODUCT_DATA_DIR, filename), 'r') as f:
+                        products.extend(json.load(f))
+                except (FileNotFoundError, json.JSONDecodeError):
+                    pass
+
+            # Obtener la lista única de categorías
+            categories = ['all'] + list(set(p['category'] for p in products))
+
+            # Generar el HTML de la página de inicio
+            html = f"""
+            <h1>Aplicación de Filtro de Productos</h1>
+            <form action="/filter" method="post">
+                <input type="text" name="search_term" placeholder="Buscar productos..." />
+                <select name="selected_category">
+                    {''.join(f'<option value="{cat}">{cat}</option>' for cat in categories)}
+                </select>
+                <button type="submit">Filtrar</button>
+            </form>
+            """
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            self.wfile.write(bytes(html, "utf-8"))
+
+        elif self.path.startswith('/filter'):
+            # Obtener los parámetros de filtro de la solicitud
+            search_term = self.path.split('?')[1].split('=')[1]
+            selected_category = self.path.split('?')[2].split('=')[1]
+
+            # Cargar los datos de los productos desde los archivos JSON
+            products = []
+            for filename in os.listdir(os.path.join(os.path.dirname(__file__), PRODUCT_DATA_DIR)):
+                try:
+                    with open(os.path.join(os.path.dirname(__file__), PRODUCT_DATA_DIR, filename), 'r') as f:
+                        products.extend(json.load(f))
+                except (FileNotFoundError, json.JSONDecodeError):
+                    pass
+
+            # Filtrar los productos
+            filtered_products = [p for p in products
+                                if search_term.lower() in p['name'].lower()
+                                and (selected_category == 'all' or p['category'] == selected_category)]
+
+            # Generar el HTML de la página de resultados
+            product_rows = ''.join(f'<tr><td>{p["name"]}</td><td>{p["category"]}</td><td>${p["price"]}</td></tr>' for p in filtered_products)
+            html = f"""
+            <h1>Resultados de Filtro</h1>
+            <table>
+                <thead>
+                    <tr><th>Nombre</th><th>Categoría</th><th>Precio</th></tr>
+                </thead>
+                <tbody>
+                    {product_rows}
+                </tbody>
+            </table>
+            """
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            self.wfile.write(bytes(html, "utf-8"))
+
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+if __name__ == "__main__":
+    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+        print(f"Serving at port {PORT}")
+        httpd.serve_forever()

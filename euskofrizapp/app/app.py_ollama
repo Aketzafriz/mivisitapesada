@@ -1,0 +1,85 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import uvicorn
+
+# Definimos un modelo de datos para los productos
+class Producto(BaseModel):
+    id: int
+    nombre: str
+    descripcion: str
+    precio: float
+    stock: int
+
+# Creamos una lista de productos para utilizar en la aplicación
+productos = [
+    Producto(id=1, nombre="Producto 1", descripcion="Descripción del producto 1", precio=19.99, stock=10),
+    Producto(id=2, nombre="Producto 2", descripcion="Descripción del producto 2", precio=29.99, stock=5),
+    Producto(id=3, nombre="Producto 3", descripcion="Descripción del producto 3", precio=39.99, stock=20)
+]
+
+# Creamos la aplicación FastAPI
+app = FastAPI()
+
+# Definimos el endpoint /productos para listar todos los productos
+@app.get("/productos")
+async def get_productos():
+    return {"message": "Lista de productos", "data": productos}
+
+# Definimos el endpoint /filter para filtrar los productos por búsqueda y categoría
+@app.get("/filter")
+async def filter_products(
+    search_term: str = "",  # Búsqueda por nombre o descripción
+    category: str = "all",  # Categoría de los productos (opcional)
+    order_by: str = None,  # Ordenamiento de los resultados (opcional)
+    price_range: tuple = (None, None),  # Rango de precios para filtrar (opcional)
+    brand: str = None,  # Marca del producto para filtrar (opcional)
+    description: str = None,  # Descripción del producto para filtrar (opcional)
+    #filters: List[str] = []  # Filtros seleccionables para aplicar en la búsqueda
+):
+    filtered_products = []
+    
+    # Si se especifica una búsqueda por nombre o descripción
+    if search_term:
+        filtered_products = [p for p in productos if p.nombre.lower().contains(search_term.lower()) or 
+p.descripcion.lower().contains(search_term.lower())]
+        
+    # Si se especifica una categoría para filtrar
+    if category != "all":
+        filtered_products = [p for p in filtered_products if p.categoria == category]
+        
+    # Si se especifica un rango de precios para filtrar
+    if price_range:
+        filtered_products = [p for p in filtered_products if p.precio >= price_range[0] and p.precio <= price_range[1]]
+        
+    # Si se especifica una marca para filtrar
+    if brand:
+        filtered_products = [p for p in filtered_products if p.marca == brand]
+        
+    # Si se especifica una descripción para filtrar
+    if description:
+        filtered_products = [p for p in filtered_products if p.descripcion.lower().contains(description.lower())]
+        
+    # Si se especifican filtros seleccionables para aplicar en la búsqueda
+    if filters:
+        for filter_ in filters:
+            if filter_ == "brand":
+                filtered_products = [p for p in filtered_products if p.marca != None]
+            elif filter_ == "description":
+                filtered_products = [p for p in filtered_products if p.descripcion.lower().contains("")]
+
+    return {"message": "Lista de productos filtrados", "data": filtered_products}
+
+# Definimos el endpoint /producto para obtener un producto por id
+@app.get("/producto/{id}")
+async def get_producto(id: int):
+    product = next((p for p in productos if p.id == id), None)
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+        
+    return {"message": "Producto encontrado", "data": product}
+
+# Iniciamos la aplicación
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+
